@@ -1,0 +1,42 @@
+{
+  "cluster_id": "c7f918e2-45a8-4c19-9137-b6151772f91a",
+  "normalized_title": "Downed high-voltage power line sparking near school",
+  "category": "Electrical_Grid",
+  "assigned_department": "Municipal Power & Utilities Authority",
+  "location": {
+    "address_or_landmark": "Lincoln Elementary School, 400 Elm St",
+    "coordinates": {
+      "lat": 37.77494,
+      "lng": -122.41941
+    },
+    "location_confidence": "High"
+  },
+  "priority": {
+    "tier": "P0_Critical",
+    "total_score": 96.0,
+    "score_breakdown": {
+      "safety_score": 40.0,
+      "impact_score": 23.0,
+      "corroboration_score": 18.0,
+      "urgency_decay_score": 15.0
+    },
+    "explainable_rationale": "Assigned priority P0_Critical with an aggregate score of 96.0/100. Public safety contributed 40.0/40 based on detected hazard indicators ('sparks flying'), amplified by 23.0/25 population/facility impact due to proximity to Lincoln Elementary School and 18.0/20 multi-channel corroboration.",
+    "key_evidence_quotes": [
+      "sparks flying everywhere right next to Lincoln Elementary School crosswalk",
+      "Downed live wire sparking on Elm St near Lincoln Elementary",
+      "Live electrical cable hanging low across sidewalk in front of elementary school, arcing and smoking on wet pavement"
+    ]
+  },
+  "action_plan": {
+    "recommended_first_response": "Deploy high-voltage utility crew to de-energize damaged feeder, establish a 50-foot safety exclusion perimeter, and isolate downed line.",
+    "required_equipment_or_crew": [
+      "High-Voltage Bucket Truck",
+      "Arc-Flash Safety PPE",
+      "Line Voltage Tester",
+      "Traffic Barrier Cones"
+    ],
+    "target_sla_hours": 2.0
+  },
+  "citizen_status_message": "URGENT DISPATCH: Our municipal utility emergency crew has been dispatched to isolate and repair the electrical hazard. Field personnel are establishing safety perimeters. Please keep a safe distance of at least 50 feet."
+}
+

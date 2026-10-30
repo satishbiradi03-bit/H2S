@@ -1,0 +1,15 @@
+{
+  "name": "civicpulse-platform",
+  "version": "1.0.0",
+  "description": "AI-Powered Civic Issue Triage & Action-Tracking Platform",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "serve": "node server.js"
+  },
+  "keywords": ["civic-tech", "triage", "ai", "fastapi", "postgis", "pgvector"],
+  "author": "CivicPulse Team",
+  "license": "Apache-2.0"
+}
+
