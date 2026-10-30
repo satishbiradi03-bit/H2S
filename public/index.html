@@ -41,6 +41,9 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
+  <!-- Supabase Official JS SDK -->
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+
   <style>
     /* Glassmorphism Classes */
     .glass-dark {
@@ -121,7 +124,8 @@
         wrench: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>,
         camera: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9zM15 13a3 3 0 11-6 0 3 3 0 016 0z"/>,
         refresh: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>,
-        duplicate: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+        duplicate: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>,
+        database: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"/>
       };
       return (
         <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" {...props}>
@@ -208,6 +212,13 @@
       const [submitLoading, setSubmitLoading] = useState(false);
       const [latestSubmission, setLatestSubmission] = useState(null);
 
+      // Supabase Cloud State
+      const [supabaseConfig, setSupabaseConfig] = useState({ configured: false, url: '' });
+      const [supabaseModalOpen, setSupabaseModalOpen] = useState(false);
+      const [sbUrlInput, setSbUrlInput] = useState('');
+      const [sbKeyInput, setSbKeyInput] = useState('');
+      const [syncingSb, setSyncingSb] = useState(false);
+
       // Apply Dark/Light theme class to html root
       useEffect(() => {
         const root = document.documentElement;
@@ -244,8 +255,77 @@
         }
       };
 
+      const checkSupabaseStatus = async () => {
+        try {
+          const res = await fetch('/api/supabase/status');
+          if (res.ok) {
+            const data = await res.json();
+            setSupabaseConfig(data);
+            if (data.url) setSbUrlInput(data.url);
+            if (data.configured && data.url && window.supabase) {
+              try {
+                const client = window.supabase.createClient(data.url, sbKeyInput || 'anon-key');
+                client.channel('complaints-realtime')
+                  .on('postgres_changes', { event: '*', schema: 'public', table: 'complaints' }, () => {
+                    loadData();
+                    showToast('Realtime update received from Supabase Cloud!');
+                  })
+                  .subscribe();
+              } catch (e) {
+                console.log('Realtime listener notice:', e.message);
+              }
+            }
+          }
+        } catch (err) {
+          console.error("Supabase status check failed:", err);
+        }
+      };
+
+      const handleSaveSupabase = async (e) => {
+        e.preventDefault();
+        if (!sbUrlInput.trim() || !sbKeyInput.trim()) {
+          showToast('Please provide both Supabase URL and Key', 'error');
+          return;
+        }
+        try {
+          const res = await fetch('/api/supabase/config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: sbUrlInput.trim(), key: sbKeyInput.trim() })
+          });
+          if (res.ok) {
+            showToast('Supabase Cloud connected successfully!', 'success');
+            setSupabaseConfig({ configured: true, url: sbUrlInput.trim() });
+            setSupabaseModalOpen(false);
+            checkSupabaseStatus();
+          } else {
+            showToast('Failed to connect to Supabase', 'error');
+          }
+        } catch (err) {
+          showToast('Error connecting to Supabase: ' + err.message, 'error');
+        }
+      };
+
+      const handleSyncToSupabase = async () => {
+        setSyncingSb(true);
+        try {
+          const res = await fetch('/api/supabase/sync', { method: 'POST' });
+          const data = await res.json();
+          if (res.ok) {
+            showToast(`Synced ${data.count} complaints to Supabase Cloud!`, 'success');
+          } else {
+            showToast(data.error || 'Sync failed', 'error');
+          }
+        } catch (err) {
+          showToast('Sync error: ' + err.message, 'error');
+        } finally {
+          setSyncingSb(false);
+        }
+      };
+
       useEffect(() => {
         loadData();
+        checkSupabaseStatus();
       }, []);
 
       // Filtered Complaints Memo
@@ -524,6 +604,23 @@
 
               {/* Search & Actions */}
               <div className="flex items-center gap-3">
+                {/* Supabase Cloud Connect Pill */}
+                <button
+                  onClick={() => setSupabaseModalOpen(true)}
+                  className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all ${
+                    supabaseConfig.configured
+                      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
+                      : 'bg-indigo-500/10 text-indigo-400 border-indigo-500/30 hover:bg-indigo-500/20'
+                  }`}
+                  title="Configure Supabase Database"
+                >
+                  <Icon name="database" className="w-3.5 h-3.5" />
+                  <span className="hidden md:inline">
+                    {supabaseConfig.configured ? 'Supabase Connected' : 'Connect Supabase'}
+                  </span>
+                  <span className={`w-2 h-2 rounded-full ${supabaseConfig.configured ? 'bg-emerald-400 animate-pulse' : 'bg-indigo-400'}`}></span>
+                </button>
+
                 <div className="relative w-48 sm:w-64">
                   <Icon name="search" className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input
@@ -1197,6 +1294,112 @@
               onClose={() => setSelectedComplaint(null)}
               theme={theme}
             />
+          )}
+
+          {/* =============================================================== */}
+          {/* SUPABASE CLOUD DATABASE CONFIGURATION MODAL */}
+          {/* =============================================================== */}
+          {supabaseModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md">
+              <div className={`w-full max-w-lg rounded-3xl border shadow-2xl p-6 space-y-5 ${
+                theme === 'dark' ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-white border-slate-300 text-slate-900'
+              }`}>
+                <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center font-bold">
+                      <Icon name="database" className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="font-black text-sm text-slate-100 flex items-center gap-2">
+                        Supabase Cloud Database
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-bold">PostgreSQL</span>
+                      </h3>
+                      <p className="text-[11px] text-slate-400">PostGIS Geospatial + Realtime Broadcast Synchronization</p>
+                    </div>
+                  </div>
+                  <button onClick={() => setSupabaseModalOpen(false)} className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800">
+                    <Icon name="close" className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-slate-950/70 border border-slate-800 text-xs text-slate-300 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-slate-400">Live Connection:</span>
+                    <span className={`font-bold px-2.5 py-0.5 rounded-full text-[11px] flex items-center gap-1.5 ${
+                      supabaseConfig.configured ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                    }`}>
+                      <span className={`w-2 h-2 rounded-full ${supabaseConfig.configured ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`}></span>
+                      {supabaseConfig.configured ? 'Connected to Cloud' : 'In-Memory Local Mode'}
+                    </span>
+                  </div>
+                  {supabaseConfig.url ? (
+                    <div className="text-[11px] font-mono text-emerald-400 truncate">
+                      Cloud Endpoint: {supabaseConfig.url}
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-slate-400">
+                      Enter your Supabase credentials below to persist work orders directly to cloud PostgreSQL.
+                    </p>
+                  )}
+                </div>
+
+                <form onSubmit={handleSaveSupabase} className="space-y-3.5 text-xs">
+                  <div>
+                    <label className="block font-bold text-slate-300 mb-1">
+                      Supabase Project URL
+                    </label>
+                    <input
+                      type="url"
+                      required
+                      placeholder="https://your-project-ref.supabase.co"
+                      value={sbUrlInput}
+                      onChange={(e) => setSbUrlInput(e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-xl border bg-slate-950 border-slate-700 text-slate-100 font-mono text-xs focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-300 mb-1">
+                      Anon / Public API Key
+                    </label>
+                    <input
+                      type="password"
+                      required
+                      placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                      value={sbKeyInput}
+                      onChange={(e) => setSbKeyInput(e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-xl border bg-slate-950 border-slate-700 text-slate-100 font-mono text-xs focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-2">
+                    <button
+                      type="submit"
+                      className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md shadow-emerald-600/30 transition-all flex items-center justify-center gap-1.5"
+                    >
+                      <Icon name="check" className="w-4 h-4" /> Save & Connect
+                    </button>
+                    <button
+                      type="button"
+                      disabled={syncingSb}
+                      onClick={handleSyncToSupabase}
+                      className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md transition-all flex items-center gap-1.5 disabled:opacity-50"
+                      title="Upload 24 demo complaints into Supabase table"
+                    >
+                      <Icon name="refresh" className={`w-3.5 h-3.5 ${syncingSb ? 'animate-spin' : ''}`} />
+                      <span>{syncingSb ? 'Syncing...' : 'Sync 24 Incidents'}</span>
+                    </button>
+                  </div>
+                </form>
+
+                <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 text-[11px] text-slate-400 space-y-1">
+                  <span className="font-bold text-slate-300 block">💡 Quick Supabase Setup:</span>
+                  <p>1. Open <strong className="text-slate-200">supabase_schema.sql</strong> in your Supabase SQL Editor and click <strong>Run</strong>.</p>
+                  <p>2. Copy your <strong>Project URL</strong> & <strong>Anon Key</strong> from Project Settings → API.</p>
+                  <p>3. Paste above and click <strong>"Save & Connect"</strong>. Supabase Realtime synchronization will activate automatically!</p>
+                </div>
+              </div>
+            </div>
           )}
 
           {/* Toast Notification Banner */}

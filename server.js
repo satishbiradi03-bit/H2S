@@ -6,6 +6,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const supabase = require('./supabaseClient');
 
 const PORT = process.env.PORT || 3000;
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -1255,6 +1256,48 @@ const server = http.createServer((req, res) => {
     res.end(JSON.stringify(data));
   };
 
+  // 0. Supabase Integration Endpoints
+  if (pathname === '/api/supabase/status' && req.method === 'GET') {
+    sendJSON(200, {
+      configured: supabase.isConfigured(),
+      url: supabase.url ? supabase.url : null
+    });
+    return;
+  }
+
+  if (pathname === '/api/supabase/config' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', () => {
+      try {
+        const payload = JSON.parse(body || '{}');
+        if (payload.url && payload.key) {
+          supabase.url = payload.url.replace(/\/+$/, '');
+          supabase.key = payload.key;
+          sendJSON(200, { message: "Supabase credentials updated successfully", configured: supabase.isConfigured() });
+        } else {
+          sendJSON(400, { error: "Missing url or key" });
+        }
+      } catch (err) {
+        sendJSON(400, { error: err.message });
+      }
+    });
+    return;
+  }
+
+  if (pathname === '/api/supabase/sync' && req.method === 'POST') {
+    supabase.bulkSyncComplaints(complaints).then(result => {
+      if (result.success) {
+        sendJSON(200, { message: "Successfully synced complaints to Supabase", count: result.count });
+      } else {
+        sendJSON(500, { error: result.error || "Sync failed" });
+      }
+    }).catch(err => {
+      sendJSON(500, { error: err.message });
+    });
+    return;
+  }
+
   // 1. GET /api/complaints - List all with search and filter
   if (pathname === '/api/complaints' && req.method === 'GET') {
     let result = [...complaints];
@@ -1353,6 +1396,12 @@ const server = http.createServer((req, res) => {
         }
 
         complaints.unshift(newComplaint);
+
+        // Async sync to Supabase if connected
+        if (supabase.isConfigured()) {
+          supabase.insertComplaint(newComplaint).catch(e => console.error("Supabase insert error:", e.message));
+        }
+
         sendJSON(201, { message: "Complaint submitted & triaged successfully", complaint: newComplaint });
       } catch (err) {
         sendJSON(400, { error: "Invalid JSON format: " + err.message });
@@ -1385,6 +1434,12 @@ const server = http.createServer((req, res) => {
             note: payload.note
           });
         }
+
+        // Async sync update to Supabase if connected
+        if (supabase.isConfigured()) {
+          supabase.updateComplaint(found.id, payload).catch(e => console.error("Supabase update error:", e.message));
+        }
+
         sendJSON(200, { message: "Complaint updated successfully", complaint: found });
       } catch (err) {
         sendJSON(400, { error: "Invalid JSON format: " + err.message });
