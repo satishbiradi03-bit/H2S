@@ -190,3 +190,4 @@ class SupabaseService {
 }
 
 module.exports = new SupabaseService();
+

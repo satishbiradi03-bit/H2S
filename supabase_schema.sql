@@ -171,3 +171,4 @@ INSERT INTO public.complaints (
     'Sunil Verma'
 )
 ON CONFLICT (id) DO NOTHING;
+

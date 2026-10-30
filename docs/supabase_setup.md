@@ -69,3 +69,4 @@ When Supabase is connected:
 - Any new complaint submitted in the app is saved to your Supabase PostgreSQL database.
 - Any status changes in the Authority Command Center update Supabase in real-time.
 - If multiple browser tabs or devices are open, updates broadcast live across all screens without reloading.
+

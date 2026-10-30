@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "serve": "node server.js"
+    "serve": "node server.js",
+    "test": "node test/suite.js"
   },
   "keywords": ["civic-tech", "triage", "ai", "fastapi", "postgis", "pgvector"],
   "author": "CivicPulse Team",
